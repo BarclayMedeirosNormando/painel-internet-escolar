@@ -1,0 +1,16 @@
+{
+  "name": "Painel de Internet Escolar — SEE-PB",
+  "short_name": "Internet Escolar",
+  "description": "Controle de sites e temas bloqueados na rede da sua escola.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#11171d",
+  "theme_color": "#0b4a7a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

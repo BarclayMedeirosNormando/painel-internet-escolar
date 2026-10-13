@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' https://*.workers.dev; manifest-src 'self'; base-uri 'self'; form-action 'none'">
+  <meta name="theme-color" content="#0b4a7a">
+  <meta name="referrer" content="no-referrer">
+  <title>Painel de Internet Escolar — SEE-PB</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/favicon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="root"><p class="loading">Carregando…</p></div>
+  <div id="msg" class="toast" hidden role="status"></div>
+  <noscript><p class="alert">Este painel precisa de JavaScript.</p></noscript>
+
+  <!-- ===== Login ===== -->
+  <template id="tpl-login">
+    <main class="login-wrap">
+      <form class="card login" id="f-login" autocomplete="off">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">🛡</span>
+          <div><h1>Painel de Internet Escolar</h1><p class="muted">Secretaria de Estado da Educação — Paraíba</p></div>
+        </div>
+        <p class="alert" id="login-err" role="alert" hidden></p>
+        <label for="matricula">Matrícula</label>
+        <input id="matricula" inputmode="numeric" required autofocus autocomplete="username">
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" required autocomplete="current-password">
+        <button class="btn primary" type="submit">Entrar</button>
+        <button class="btn ghost" type="button" id="btn-install" hidden>Instalar como aplicativo</button>
+        <p class="muted small">Acesso restrito a diretores e coordenadores pedagógicos. Todas as alterações ficam registradas.</p>
+      </form>
+    </main>
+  </template>
+
+  <!-- ===== Trocar senha ===== -->
+  <template id="tpl-senha">
+    <main class="login-wrap compact">
+      <form class="card login" id="f-senha" autocomplete="off">
+        <h1 id="senha-title">Trocar senha</h1>
+        <p class="notice" id="senha-forced" hidden>Este é o seu primeiro acesso (ou a senha foi redefinida pela TI). Digite a <strong>senha provisória</strong> recebida e escolha uma senha só sua.</p>
+        <p class="alert" id="senha-err" role="alert" hidden></p>
+        <label for="atual" id="lbl-atual">Senha atual</label>
+        <input id="atual" type="password" required autofocus autocomplete="current-password">
+        <label for="nova">Nova senha</label>
+        <input id="nova" type="password" required minlength="8" autocomplete="new-password">
+        <label for="repete">Repita a nova senha</label>
+        <input id="repete" type="password" required minlength="8" autocomplete="new-password">
+        <p class="muted small">Mínimo de 8 caracteres, diferente da atual, sem a sua matrícula e sem sequências fáceis (12345678, senha123).</p>
+        <button class="btn primary" type="submit">Salvar nova senha</button>
+        <a class="btn ghost center" id="senha-cancel" href="#/painel">Cancelar</a>
+      </form>
+    </main>
+  </template>
+
+  <!-- ===== Painel das escolas ===== -->
+  <template id="tpl-painel">
+    <main class="wrap" id="painel">
+      <p class="alert" id="sem-escola" hidden>Seu cadastro ainda não está vinculado a nenhuma escola. Procure a TI da Sede.</p>
+      <div id="painel-body">
+        <section class="card selector">
+          <label for="perfil">Escola e rede</label>
+          <select id="perfil"></select>
+          <p class="muted small">“Alunos” controla laboratórios e redes dos estudantes; “Administrativo” controla secretaria, direção e sala dos professores.</p>
+        </section>
+
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-tab="uso" role="tab">Uso da rede</button>
+          <button class="tab" data-tab="sites" role="tab">Sites</button>
+          <button class="tab" data-tab="temas" role="tab">Temas</button>
+          <button class="tab" data-tab="hist" role="tab">Histórico de alterações</button>
+        </nav>
+
+        <section class="panel" id="tab-uso">
+          <div class="row between">
+            <h2>Quem está tentando acessar o que é bloqueado</h2>
+            <label class="inline">Período
+              <select id="horas">
+                <option value="1">última hora</option>
+                <option value="24" selected>últimas 24 horas</option>
+                <option value="72">últimos 3 dias</option>
+                <option value="168">últimos 7 dias</option>
+              </select>
+            </label>
+          </div>
+          <div class="kpis" id="kpis"></div>
+          <div class="grid2">
+            <div class="card"><h3>Computadores com mais bloqueios</h3>
+              <div class="table-wrap"><table id="t-dev"><thead><tr><th>Computador</th><th>Bloqueios</th><th>Mais tentados</th><th>Última tentativa</th></tr></thead><tbody></tbody></table></div></div>
+            <div class="card"><h3>Sites mais bloqueados</h3>
+              <div class="table-wrap"><table id="t-dom"><thead><tr><th>Site</th><th>Vezes</th><th>Motivo</th><th class="allow-col"></th></tr></thead><tbody></tbody></table></div></div>
+          </div>
+          <p class="muted small" id="uso-note"></p>
+        </section>
+
+        <section class="panel" id="tab-sites" hidden>
+          <div class="grid2">
+            <div class="card"><h3>Sites bloqueados pela escola</h3>
+              <form class="add" data-lista="bloqueados"><input placeholder="exemplo.com.br" required aria-label="Site a bloquear"><button class="btn danger" type="submit">Bloquear</button></form>
+              <ul class="chips" id="l-bloqueados"></ul></div>
+            <div class="card" id="card-liberados"><h3>Sites liberados pela escola</h3>
+              <form class="add" data-lista="liberados"><input placeholder="exemplo.com.br" required aria-label="Site a liberar"><button class="btn primary" type="submit">Liberar</button></form>
+              <ul class="chips" id="l-liberados"></ul>
+              <p class="muted small">Liberar um site faz ele funcionar mesmo que esteja numa lista de bloqueio. Use apenas para sites que você conhece e confia.</p></div>
+          </div>
+          <p class="muted small">Ao bloquear um endereço, todos os seus subendereços também ficam bloqueados (ex.: bloquear <em>site.com</em> bloqueia <em>m.site.com</em>).</p>
+        </section>
+
+        <section class="panel" id="tab-temas" hidden>
+          <div class="grid2">
+            <div class="card"><h3>Temas</h3><ul class="toggles" id="tg-categories"></ul></div>
+            <div class="card"><h3>Aplicativos e sites específicos</h3><ul class="toggles" id="tg-services"></ul></div>
+          </div>
+          <p class="muted small">Ligado = bloqueado nesta rede. As proteções contra vírus e golpes (phishing) ficam sempre ativas e são gerenciadas pela TI da Sede.</p>
+        </section>
+
+        <section class="panel" id="tab-hist" hidden>
+          <div class="card"><h3>Últimas alterações feitas no painel</h3>
+            <div class="table-wrap"><table id="t-hist"><thead><tr><th>Quando</th><th>Quem (matrícula)</th><th>Ação</th><th>Item</th></tr></thead><tbody></tbody></table></div></div>
+        </section>
+      </div>
+    </main>
+  </template>
+
+  <!-- ===== Administração ===== -->
+  <template id="tpl-admin">
+    <main class="wrap" id="admin">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="users" role="tab">Servidores</button>
+        <button class="tab" data-tab="schools" role="tab">Escolas e IDs</button>
+        <button class="tab" data-tab="hist" role="tab">Histórico geral</button>
+      </nav>
+
+      <section id="temp-box" class="card temp-box" hidden aria-live="polite">
+        <h3 id="temp-title">Senha provisória</h3>
+        <p class="muted small">Anote ou copie agora e entregue ao servidor <strong>por telefone ou pessoalmente</strong>. Ela <strong>não fica salva</strong> e não poderá ser vista de novo (se perder, use “Redefinir senha”). No primeiro acesso o sistema exige a criação de uma senha própria.</p>
+        <p class="temp-line"><code id="temp-value"></code>
+          <button class="btn tiny" type="button" id="temp-copy">Copiar</button>
+          <button class="btn tiny ghost" type="button" id="temp-close">Fechar</button></p>
+        <p class="small" id="temp-who"></p>
+      </section>
+
+      <section class="panel" id="tab-users">
+        <div class="grid2">
+          <div class="card">
+            <h3 id="uform-title">Cadastrar servidor</h3>
+            <form id="uform" class="stack" autocomplete="off">
+              <label for="u-mat">Matrícula</label>
+              <input id="u-mat" inputmode="numeric" required maxlength="15">
+              <p class="small muted hint" id="u-dir" hidden></p>
+              <label for="u-nome">Nome completo</label>
+              <input id="u-nome" required maxlength="100">
+              <label for="u-tel">Telefone (WhatsApp/celular)</label>
+              <input id="u-tel" inputmode="tel" placeholder="(83) 99999-9999">
+              <label for="u-papel">Papel</label>
+              <select id="u-papel">
+                <option value="diretor">Diretor(a)</option>
+                <option value="coordenador">Coordenador(a) pedagógico</option>
+                <option value="admin">Administrador (TI da Sede)</option>
+              </select>
+              <fieldset id="u-escolas-box">
+                <legend>Escola(s) / ID(s) liberados</legend>
+                <input id="u-busca" type="search" placeholder="Filtrar escolas…" aria-label="Filtrar escolas">
+                <div id="u-escolas" class="checklist"></div>
+                <p class="muted small">Marque uma ou mais escolas: o servidor só enxergará os IDs delas.</p>
+              </fieldset>
+              <div class="row">
+                <button class="btn primary" type="submit" id="u-save">Cadastrar e gerar senha provisória</button>
+                <button class="btn ghost" type="button" id="u-cancel" hidden>Cancelar edição</button>
+              </div>
+            </form>
+          </div>
+          <div class="card">
+            <div class="row between">
+              <h3>Servidores cadastrados <span class="muted small" id="u-count"></span></h3>
+              <input id="u-filtro" type="search" placeholder="Buscar nome ou matrícula" class="search-narrow" aria-label="Buscar servidor">
+            </div>
+            <div class="table-wrap"><table id="t-users"><thead><tr><th>Servidor</th><th>Telefone</th><th>Escola(s)</th><th>Situação</th><th></th></tr></thead><tbody></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="tab-schools" hidden>
+        <div class="grid2">
+          <div class="card">
+            <h3 id="sform-title">Cadastrar escola</h3>
+            <form id="sform" class="stack" autocomplete="off">
+              <label for="s-codigo">Código da escola (INEP ou outro identificador)</label>
+              <input id="s-codigo" required maxlength="20">
+              <label for="s-nome">Nome da escola</label>
+              <input id="s-nome" required maxlength="120">
+              <label for="s-alunos">ID NextDNS — Alunos</label>
+              <input id="s-alunos" placeholder="ex.: 2fdcb8" maxlength="12">
+              <label for="s-adm">ID NextDNS — Administrativo</label>
+              <input id="s-adm" placeholder="ex.: 5a7945" maxlength="12">
+              <p class="muted small">O ID é o “Configuration ID” mostrado na aba Configuração do NextDNS. Informe ao menos um.</p>
+              <div class="row">
+                <button class="btn primary" type="submit">Salvar escola</button>
+                <button class="btn ghost" type="button" id="s-cancel" hidden>Cancelar edição</button>
+              </div>
+            </form>
+          </div>
+          <div class="card">
+            <h3>Escolas cadastradas <span class="muted small" id="s-count"></span></h3>
+            <div class="table-wrap"><table id="t-schools"><thead><tr><th>Escola</th><th>IDs</th><th>Servidores</th><th></th></tr></thead><tbody></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="tab-hist" hidden>
+        <div class="card"><h3>Últimas ações (todas as escolas e cadastros)</h3>
+          <div class="table-wrap"><table id="t-hist"><thead><tr><th>Quando</th><th>Quem (matrícula)</th><th>Escola</th><th>Ação</th><th>Item</th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+    </main>
+  </template>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

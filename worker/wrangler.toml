@@ -1,0 +1,22 @@
+name = "painel-internet-escolar"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Endereço do front no GitHub Pages (somente a origem, sem caminho). Várias origens: separe por vírgula.
+# Ex.: "https://seuusuario.github.io"
+[vars]
+ALLOWED_ORIGIN = "https://barclaymedeirosnormando.github.io"
+DIRECTOR_CAN_ALLOW = "1"      # 1 = diretor pode liberar sites; 0 = só bloquear
+SESSION_MINUTES = "120"
+# Custo do hash de senha (máx. 100000). Se o login der erro de limite de CPU no plano gratuito, use o plano pago
+# ou reduza (ex.: "30000") — pior para a segurança, mas aceitável com senhas fortes.
+PBKDF2_ITERATIONS = "100000"
+
+# Crie com:  npx wrangler kv namespace create PAINEL   e cole o id abaixo.
+[[kv_namespaces]]
+binding = "PAINEL"
+id = "COLE_O_ID_DO_KV_AQUI"
+
+# Segredos (nunca ficam neste arquivo):
+#   npx wrangler secret put SECRET_KEY
+#   npx wrangler secret put NEXTDNS_API_KEY
