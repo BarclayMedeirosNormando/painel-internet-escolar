@@ -41,19 +41,21 @@
 
   class ApiError extends Error { constructor(msg, status, data) { super(msg); this.status = status; this.data = data; } }
 
+  // A API é um Google Apps Script: um único endereço (/exec). Cada chamada é um POST em text/plain
+  // (evita o "preflight" de CORS) com {method, path, token, body}; a resposta traz {status, data}.
   async function api(path, method = "GET", body, { auth = true } = {}) {
-    const headers = {};
-    if (auth && token()) headers.Authorization = "Bearer " + token();
-    const opt = { method, headers };
-    if (body !== undefined) { headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
-    let r;
-    try { r = await fetch(API + path, opt); }
-    catch { throw new ApiError("Sem conexão com o servidor. Verifique a internet e tente de novo.", 0, {}); }
-    let data = {};
-    try { data = await r.json(); } catch {}
-    if (r.status === 401 && auth) { logout(true); throw new ApiError("Sessão expirada. Entre novamente.", 401, data); }
-    if (r.status === 403 && data.must_change) { me = null; location.hash = "#/senha"; throw new ApiError(data.error, 403, data); }
-    if (!r.ok) throw new ApiError(data.error || "Não foi possível concluir a ação.", r.status, data);
+    const msg = { method, path };
+    if (auth && token()) msg.token = token();
+    if (body !== undefined) msg.body = body;
+    let r, env = null;
+    try {
+      r = await fetch(API, { method: "POST", body: JSON.stringify(msg), redirect: "follow", credentials: "omit", cache: "no-store" });
+      env = await r.json();
+    } catch { throw new ApiError("Sem conexão com o servidor. Verifique a internet e tente de novo.", 0, {}); }
+    const status = Number(env && env.status) || 500, data = (env && env.data) || {};
+    if (status === 401 && auth) { logout(true); throw new ApiError("Sessão expirada. Entre novamente.", 401, data); }
+    if (status === 403 && data.must_change) { me = null; location.hash = "#/senha"; throw new ApiError(data.error, 403, data); }
+    if (status < 200 || status >= 300) throw new ApiError(data.error || "Não foi possível concluir a ação.", status, data);
     return data;
   }
   const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { if (e.status !== 401) toast(e.message, true); } };
@@ -72,8 +74,8 @@
 
   async function route() {
     const hash = location.hash || "#/";
-    if (!API || API.includes("SEUUSUARIO")) {
-      root.replaceChildren(el("p", { class: "alert", text: "Configuração pendente: ajuste PAINEL_API em config.js com o endereço do Worker." }));
+    if (!API || API.includes("SEU_ID")) {
+      root.replaceChildren(el("p", { class: "alert", text: "Configuração pendente: ajuste PAINEL_API em config.js com o endereço da API (Apps Script)." }));
       return;
     }
     if (!token()) { if (hash !== "#/login") { location.hash = "#/login"; return; } return viewLogin(); }
@@ -282,7 +284,9 @@
       $$(".tab").forEach((x) => x.classList.toggle("active", x === b));
       $$(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + b.dataset.tab));
       if (b.dataset.tab === "hist") guard(loadHist)();
+      if (b.dataset.tab === "dir" && !dirLoaded) guard(() => loadDir(true))();
     }));
+    const openTab = (name) => $(`.tab[data-tab="${name}"]`).click();
 
     async function reload() {
       data = await api("/api/admin/dados");
@@ -478,6 +482,36 @@
       if (!d.rows.length) tb.append(el("tr", {}, el("td", { colspan: "5", class: "muted", text: "Sem registros ainda." })));
       d.rows.forEach((r) => tb.append(el("tr", {}, el("td", { text: when(r.ts) }), el("td", { text: r.matricula }),
         el("td", { text: r.school && r.school !== "-" ? r.school : "—" }), el("td", { text: r.action }), el("td", { text: r.target }))));
+    }
+
+    /* cadastro de gestores (listagem com busca) */
+    let dirLoaded = false, dirOffset = 0, dirTimer;
+    async function loadDir(reset) {
+      if (reset) { dirOffset = 0; $("#t-dir tbody").replaceChildren(); }
+      const q = encodeURIComponent($("#d-busca").value.trim());
+      const d = await api(`/api/admin/diretorio?q=${q}&offset=${dirOffset}&limit=50`);
+      dirLoaded = true;
+      const tb = $("#t-dir tbody");
+      const have = new Set(data.users.map((u) => u.matricula));
+      if (!d.total && reset) tb.append(el("tr", {}, el("td", { colspan: "6", class: "muted", text: d.base ? "Nenhum gestor encontrado." : "O cadastro de gestores ainda não foi carregado (aba diretorio da planilha)." })));
+      d.rows.forEach((g) => tb.append(el("tr", {},
+        el("td", { text: g.matricula }), el("td", { text: g.nome }), el("td", { class: "small", text: g.cargo }),
+        el("td", { class: "small", text: g.setor }), el("td", { class: "small", text: g.municipio }),
+        el("td", {}, have.has(g.matricula)
+          ? el("span", { class: "pill done", text: "Já cadastrado" })
+          : el("button", { class: "btn tiny primary", type: "button", text: "Cadastrar", onclick: () => cadastrarDe(g.matricula) })))));
+      dirOffset += d.rows.length;
+      $("#d-count").textContent = d.total ? `(${Math.min(dirOffset, d.total)} de ${d.total})` : "";
+      $("#d-more").hidden = dirOffset >= d.total;
+    }
+    $("#d-busca").addEventListener("input", () => { clearTimeout(dirTimer); dirTimer = setTimeout(guard(() => loadDir(true)), 300); });
+    $("#d-more").addEventListener("click", guard(() => loadDir(false)));
+    function cadastrarDe(mat) {
+      resetUserForm();
+      openTab("users");
+      $("#u-mat").value = mat;
+      $("#u-mat").dispatchEvent(new Event("change"));
+      $("#uform").scrollIntoView({ block: "center" });
     }
 
     guard(async () => { syncRole(); await reload(); })();
