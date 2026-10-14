@@ -1,76 +1,49 @@
-# Painel de Internet Escolar — SEE-PB (PWA)
+# Painel de Internet Escolar — SEE-PB (PWA + Google Apps Script)
 
-Front em **GitHub Pages** (PWA instalável) + API em **Cloudflare Worker** + dados no **Cloudflare KV**.
-A chave do NextDNS fica só no Worker (segredo), nunca no navegador nem no GitHub.
+Site (PWA instalável) no **GitHub Pages** + API em **Google Apps Script** + banco de dados numa **planilha do Google**.
+A chave do NextDNS fica só nas *Propriedades do script* (nunca no navegador, no GitHub nem na planilha).
 
 ```
-web/      -> site (HTML/JS/CSS, manifest, service worker)         => GitHub Pages
-worker/   -> API (login, escolas, servidores, NextDNS, auditoria)  => Cloudflare Workers
-tools/    -> preparar_dados.py (primeiro administrador, escolas, cadastro de gestores)
+web/          -> o site (PWA)                         => GitHub Pages (deploy automático a cada push)
+apps-script/  -> Code.gs = a API (login, escolas, NextDNS, auditoria)
+tools/        -> gerar_planilha.py (cria a planilha-banco a partir da lista de servidores)
 ```
-
-**Atualizar = `git push`.** Mexeu em `web/` → o Pages publica e todos recebem a versão nova na próxima abertura
-(o service worker é rede-primeiro e cada deploy gera um novo; quem está com o app aberto vê "Nova versão instalada").
-Mexeu em `worker/` → os testes rodam e o Worker é publicado.
 
 ## Instalação (uma vez)
 
-### 1. Repositório
-Crie um repositório no GitHub (público: o Pages gratuito exige; o código não tem segredos) e envie esta pasta.
+### 1. Planilha-banco
+1. `python tools/gerar_planilha.py --servidores SERVIDORES_SETEMBRO.xlsx --escolas schools.json` gera `PainelBanco.xlsx`.
+2. Google Drive → **Novo → Upload de arquivo** → abra o arquivo → **Arquivo → Salvar como Planilha Google**.
+   Apague o `.xlsx` do computador (tem nomes e matrículas).
+3. Mantenha a planilha **privada** (compartilhe só com a TI da Sede — veja "Segurança").
 
-### 2. Cloudflare (no computador, na pasta `worker`)
-```
-npm install
-npx wrangler login
-npx wrangler kv namespace create PAINEL
-```
-Copie o `id` mostrado para `wrangler.toml` (campo `id`) e ajuste `ALLOWED_ORIGIN` para `https://SEUUSUARIO.github.io`.
+### 2. Script
+1. Na planilha: **Extensões → Apps Script**. Apague o conteúdo e cole o `apps-script/Code.gs`. **Salvar**.
+2. **Configurações do projeto (engrenagem) → Propriedades do script → Adicionar**:
+   - `NEXTDNS_API_KEY` = chave **nova** do NextDNS (Conta → Chave da API)
+   - `ADMIN_MATRICULA` = sua matrícula; `ADMIN_NOME` = seu nome
+3. No editor, escolha a função **`instalar`** → **Executar** → autorize (Avançado → Acessar… → Permitir).
+4. Execute **`criarAdmin`**. Abra **Execuções/Registro**: aparece a **senha provisória** (troca obrigatória no 1º acesso).
+5. (opcional) Execute `verificarConfiguracao` (confere chave e planilha) e `medirLogin` (tempo do login).
 
-Segredos (o comando pergunta o valor; não aparecem em arquivo nenhum):
-```
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # gera o valor do SECRET_KEY
-npx wrangler secret put SECRET_KEY
-npx wrangler secret put NEXTDNS_API_KEY
-```
-Publique: `npx wrangler deploy` — ele mostra o endereço `https://painel-internet-escolar.<conta>.workers.dev`.
+### 3. Publicar a API
+**Implantar → Nova implantação → Tipo: App da Web** → *Executar como:* **Eu** · *Quem pode acessar:* **Qualquer pessoa** → Implantar.
+Copie a URL que termina em **`/exec`** e coloque em `web/config.js` (`window.PAINEL_API`) — ou na variável `PAINEL_API` do repositório (Settings → Secrets and variables → Actions → Variables), que o deploy grava no `config.js`.
 
-### 3. Primeiro administrador, escolas e cadastro de gestores
-```
-cd ../tools
-pip install pandas openpyxl
-python preparar_dados.py --admin-matricula SUA_MATRICULA --admin-nome "Seu Nome" ^
-       --escolas schools.json --servidores SERVIDORES_SETEMBRO.xlsx
-cd ../worker
-npx wrangler kv bulk put ../tools/seed.json --binding PAINEL --remote
-```
-O script imprime a **senha provisória** do administrador (troca obrigatória no 1º acesso). Depois **apague** `tools/seed.json`.
-`--escolas` e `--servidores` são opcionais; o `schools.json` é o do painel antigo (`{"codigo": {"name": "...", "profiles": {"Alunos": "id"}}}`).
+## Atualizações
+- **Site** (`web/`): `git push` → Pages publica → o PWA avisa e atualiza em todos os aparelhos.
+- **API** (`Code.gs`): cole o novo código no editor → **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar** (a URL continua a mesma).
 
-### 4. Front (GitHub Pages)
-1. No GitHub: **Settings → Pages → Source: GitHub Actions**.
-2. **Settings → Secrets and variables → Actions → Variables**: crie `PAINEL_API` = endereço do Worker (sem barra no final).
-   (Ou edite `web/config.js`.)
-3. Faça `git push`. O endereço do painel será `https://SEUUSUARIO.github.io/NOMEDOREPO/`.
-
-### 5. Deploy automático do Worker (opcional)
-No GitHub, crie os *secrets* `CLOUDFLARE_API_TOKEN` (modelo “Edit Cloudflare Workers”) e `CLOUDFLARE_ACCOUNT_ID`.
-Sem eles, publique a API manualmente com `npx wrangler deploy`.
-
-## Uso
-- Diretores/coordenadores abrem o endereço, entram com matrícula + senha e podem **instalar** (Chrome/Edge: ícone na barra; Android: “Adicionar à tela inicial”; iPhone: Compartilhar → Tela de Início).
-- O administrador (TI da Sede) usa **Administração**: cadastra escolas e IDs, cadastra servidores (a matrícula consulta o cadastro de gestores e preenche nome, cargo e escola), gera/redefine senha provisória.
+## Operação
+- **Editar dados pela planilha**: aba `usuarios` (nome, telefone, papel, escolas separadas por `;`), `escolas` (perfis em JSON), `diretorio`. O painel enxerga a mudança na hora.
+- **Cadastrar em massa**: use a aba *Cadastro de gestores* do painel (lista as matrículas e preenche o formulário).
+- **Auditoria**: aba `auditoria`; registros com mais de 400 dias são apagados sozinhos 1x por dia.
+- Em caso de problema: *Execuções* no editor do Apps Script mostra os erros.
 
 ## Segurança e LGPD
-- Senhas: PBKDF2-SHA256 (100 mil iterações, configurável em `PBKDF2_ITERATIONS`). **Atenção:** cada login gasta algumas dezenas de ms de CPU; o plano gratuito do Workers limita a 10 ms por requisição, então, se o login falhar com erro de CPU, use o plano Workers pago (US$ 5/mês) ou reduza as iterações. Sessão: token assinado (HMAC) que expira em 2 h e é invalidado ao trocar/redefinir a senha.
-- Bloqueio de 10 min após 5 erros (por matrícula+IP). Cada escola só enxerga os próprios IDs (validado no servidor). Lista fechada de temas; domínios `nextdns.io`/`pb.gov.br` protegidos.
-- Painel mostra o **nome do computador**, nunca IP, e só consultas **bloqueadas**.
-- Auditoria no KV por **400 dias** (ajuste `AUDIT_TTL` em `worker/src/index.js`).
-- O Cloudflare passa a hospedar dados de contas (nome, telefone, matrícula, hash). Confirme com o encarregado de dados/jurídico da SEE-PB.
-- O KV é eventualmente consistente: remover um usuário ou trocar vínculo pode levar até ~1 min para valer em todos os pontos.
-- Limites do plano gratuito do KV: 1.000 gravações e 1.000 listagens por dia (suficiente para a operação normal; a carga inicial do seed é de poucas centenas de gravações).
-- Um servidor pode ter no máximo 25 escolas vinculadas.
-
-## Desenvolvimento
-```
-cd worker && npm test      # testes da API (KV e NextDNS simulados)
-```
+- Senhas: PBKDF2-SHA256 (50 mil iterações, em JavaScript puro) com sal individual; a planilha guarda só o hash. Sessão: token assinado (HMAC) que expira em 2 h e é invalidado ao trocar/redefinir a senha. Bloqueio de 10 min após 5 erros **por matrícula** (o Apps Script não informa o IP do usuário).
+- **Quem edita a planilha enxerga os hashes e os dados pessoais.** Compartilhe a planilha só com a TI da Sede e dê "Editor" a poucas pessoas. Não compartilhe a planilha com os gestores.
+- O script roda com a **conta de quem o implantou** (Executar como: Eu): quem controla a conta controla o sistema. Use verificação em duas etapas.
+- O painel só mostra **nome do computador**, nunca o IP (minimização).
+- A planilha e o script passam a hospedar dados de servidores no Google: confirme com o encarregado de dados da SEE-PB.
+- Limites do Apps Script (conta gratuita): ~20 mil chamadas externas/dia ao NextDNS e 6 min por execução — sobra para uso escolar. Cada ação leva ~1–3 s.
