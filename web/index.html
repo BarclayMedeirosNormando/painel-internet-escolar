@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' https://*.workers.dev; manifest-src 'self'; base-uri 'self'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; base-uri 'self'; form-action 'none'">
   <meta name="theme-color" content="#0b4a7a">
   <meta name="referrer" content="no-referrer">
   <title>Painel de Internet Escolar — SEE-PB</title>
@@ -131,6 +131,7 @@
     <main class="wrap" id="admin">
       <nav class="tabs" role="tablist">
         <button class="tab active" data-tab="users" role="tab">Servidores</button>
+        <button class="tab" data-tab="dir" role="tab">Cadastro de gestores</button>
         <button class="tab" data-tab="schools" role="tab">Escolas e IDs</button>
         <button class="tab" data-tab="hist" role="tab">Histórico geral</button>
       </nav>
@@ -181,6 +182,18 @@
             </div>
             <div class="table-wrap"><table id="t-users"><thead><tr><th>Servidor</th><th>Telefone</th><th>Escola(s)</th><th>Situação</th><th></th></tr></thead><tbody></tbody></table></div>
           </div>
+        </div>
+      </section>
+
+      <section class="panel" id="tab-dir" hidden>
+        <div class="card">
+          <div class="row between">
+            <h3>Cadastro de gestores <span class="muted small" id="d-count"></span></h3>
+            <input id="d-busca" type="search" placeholder="Buscar por nome, matrícula, escola ou município" class="search-wide" aria-label="Buscar gestor">
+          </div>
+          <p class="muted small">Diretores, vice-diretores e coordenadores da planilha de servidores. Clique em <strong>Cadastrar</strong> para abrir o cadastro já preenchido.</p>
+          <div class="table-wrap"><table id="t-dir"><thead><tr><th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Escola / setor</th><th>Município</th><th></th></tr></thead><tbody></tbody></table></div>
+          <p><button class="btn" type="button" id="d-more" hidden>Mostrar mais</button></p>
         </div>
       </section>
 

@@ -1,6 +1,4 @@
 node_modules/
-.dev.vars
 .env
-tools/seed.json
 *.xlsx
-.wrangler/
+.clasp.json
